@@ -1,0 +1,153 @@
+version: '3'
+
+services:
+  # nginx
+  nginx:
+    image: nginx
+    container_name: nas_nginx
+    volumes:
+      - ${DOCKER_VOLUME_DIR}/nginx/www:/www
+      - ${DOCKER_VOLUME_DIR}/nginx/conf.d:/etc/nginx/conf.d
+      - ${DOCKER_VOLUME_DIR}/nginx/logs:/var/log/nginx
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    networks:
+      - nas_net
+    restart: unless-stopped
+    extra_hosts:
+      - "docker.host:${INTERNAL_DOCKER_HOST}"
+    ports:
+      - "80:80"
+
+  # mariadb
+  mariadb:
+    image: mariadb:10.1
+    container_name: nas_mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: filerun
+      MYSQL_PASSWORD: filerun
+      MYSQL_DATABASE: filerun
+    networks:
+      - nas_net
+    restart: unless-stopped
+    volumes:
+      - ${DOCKER_VOLUME_DIR}/filerun/db:/var/lib/mysql
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
+  # filerun
+  filerun:
+    image: afian/filerun
+    container_name: nas_filerun
+    environment:
+      FR_DB_HOST: mariadb
+      FR_DB_PORT: 3306
+      FR_DB_NAME: filerun
+      FR_DB_USER: filerun
+      FR_DB_PASS: filerun
+      APACHE_RUN_USER: ${APP_RUN_USER}  # your nas user (not root), use `id username`(e.g. `id admin`) to get user & group
+      APACHE_RUN_USER_ID: ${APP_RUN_USER_ID}
+      APACHE_RUN_GROUP: ${APP_RUN_GROUP}
+      APACHE_RUN_GROUP_ID: ${APP_RUN_GROUP_ID}
+    networks:
+      - nas_net
+    restart: unless-stopped
+    depends_on:
+      - mariadb
+    links:
+      - mariadb:mariadb
+    ports:
+      - "8081:80"
+    volumes:
+      - ${DOCKER_VOLUME_DIR}/filerun/html:/var/www/html
+      - ${CLOUD_DATA_DIR}:/user-files
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
+  # jellyfin
+  jellyfin:
+    image: jellyfin/jellyfin:10.4.3
+    container_name: nas_jellyfin
+    volumes:
+      - ${DOCKER_VOLUME_DIR}/jellyfin/config:/config
+      - ${DOCKER_VOLUME_DIR}/jellyfin/cache:/cache
+      - ${MEDIA_DIR}:/media
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    devices:
+      - /dev/dri:/dev/dri
+    user: "0:0"
+    extra_hosts:
+      - "api.themoviedb.org:13.224.161.90"
+    ports:
+      - "8096:8096"
+    restart: unless-stopped
+    networks:
+      - nas_net
+
+  # transmission
+  transmission:
+    image: linuxserver/transmission
+    container_name: nas_transmission
+    environment:
+      TZ: Asia/Shanghai
+      PUID: ${APP_RUN_USER_ID}
+      PGID: ${APP_RUN_GROUP_ID}
+      TRANSMISSION_WEB_HOME: /transmission-web-control/
+      USER: ${TRANSMISSION_USER}
+      PASS: ${TRANSMISSION_PASSWORD}
+    volumes:
+      - ${DOCKER_VOLUME_DIR}/transmission/config:/config
+      - ${DOWNLOAD_DIR}:/downloads
+    ports:
+      - "9091:9091"
+      - "51413:51413"
+      - "51413:51413/udp"
+    restart: unless-stopped
+    networks:
+      - nas_net
+
+  # qbittorrent
+  qbittorrent:
+    image: linuxserver/qbittorrent
+    container_name: nas_qbittorrent
+    environment:
+      PUID: ${APP_RUN_USER_ID}
+      PGID: ${APP_RUN_GROUP_ID}
+      TZ: Asia/Shanghai
+      UMASK_SET: "022"
+      WEBUI_PORT: "8082"
+    volumes:
+      - ${DOCKER_VOLUME_DIR}/qbittorrent/config:/config
+      - ${DOWNLOAD_DIR}/qbittorrent:/downloads
+    ports:
+      - "36881:36881"
+      - "36881:36881/udp"
+      - "8082:8082"
+    restart: unless-stopped
+    networks:
+      - nas_net
+
+  # vscode
+  vscode:
+    image: codercom/code-server:latest
+    container_name: nas_vscode
+    environment:
+      PASSWORD: ${VSCODE_PASSWORD}
+    user: "0:0"
+    volumes:
+      - ${DOCKER_VOLUME_DIR}/vscode/code-server:/root/.local/share/code-server
+      - ${DOCKER_VOLUME_DIR}/vscode/config:/root/.config/code-server
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /:/home/coder/rootfs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    ports:
+      - "8090:8080"
+    restart: unless-stopped
+    networks:
+      - nas_net
+
+networks:
+  nas_net:
