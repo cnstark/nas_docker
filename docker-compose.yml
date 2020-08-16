@@ -86,28 +86,6 @@ services:
     networks:
       - nas_net
 
-  # transmission
-  transmission:
-    image: linuxserver/transmission
-    container_name: nas_transmission
-    environment:
-      TZ: Asia/Shanghai
-      PUID: ${APP_RUN_USER_ID}
-      PGID: ${APP_RUN_GROUP_ID}
-      TRANSMISSION_WEB_HOME: /transmission-web-control/
-      USER: ${TRANSMISSION_USER}
-      PASS: ${TRANSMISSION_PASSWORD}
-    volumes:
-      - ${DOCKER_VOLUME_DIR}/transmission/config:/config
-      - ${DOWNLOAD_DIR}:/downloads
-    ports:
-      - "9091:9091"
-      - "51413:51413"
-      - "51413:51413/udp"
-    restart: unless-stopped
-    networks:
-      - nas_net
-
   # qbittorrent
   qbittorrent:
     image: linuxserver/qbittorrent
